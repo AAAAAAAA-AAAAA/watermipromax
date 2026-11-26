@@ -410,6 +410,7 @@ export function createApp({
   sensorTimeoutMs = 30_000,
   sensorKey = '',
   blynkToken = '',
+  blynkTemplateId = '',
   blynkBaseUrl = undefined,
   blynkPins = DEFAULT_BLYNK_PINS,
   blynkPlantId = '',
@@ -430,7 +431,14 @@ export function createApp({
   app.use('/photos', express.static(store.photoDir));
 
   app.get('/api/config', (req, res) => {
-    res.json({ hasKey: Boolean(apiKey), mock, analysisModel, chatModel, blynkEnabled: Boolean(blynkToken) });
+    res.json({
+      hasKey: Boolean(apiKey),
+      mock,
+      analysisModel,
+      chatModel,
+      blynkEnabled: Boolean(blynkToken),
+      ...(blynkTemplateId && { blynkTemplateId }),
+    });
   });
 
   const withSensors = (plant) => {
@@ -820,6 +828,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     sensorTimeoutMs: env.SENSOR_TIMEOUT_MS !== undefined ? Number(env.SENSOR_TIMEOUT_MS) : undefined,
     sensorKey: env.SENSOR_KEY || '',
     blynkToken: env.BLYNK_AUTH_TOKEN || '',
+    blynkTemplateId: env.BLYNK_TEMPLATE_ID || '',
     blynkBaseUrl: env.BLYNK_BASE_URL || undefined,
     blynkPlantId: env.BLYNK_PLANT_ID || '',
     blynkPins: {
