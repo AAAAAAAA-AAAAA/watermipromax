@@ -7,6 +7,7 @@ RUN npm ci --omit=dev
 
 COPY server.js plantnet.js groq.js ./
 COPY public ./public
+COPY arduino ./arduino
 
 RUN mkdir -p /data
 

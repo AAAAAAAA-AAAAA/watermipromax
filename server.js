@@ -421,6 +421,7 @@ export function createApp({
 
   app.use(express.json({ limit: '10mb' }));
   app.use(express.static(join(ROOT, 'public')));
+  app.use('/arduino', express.static(join(ROOT, 'arduino')));
   app.use('/photos', express.static(store.photoDir));
 
   app.get('/api/config', (req, res) => {

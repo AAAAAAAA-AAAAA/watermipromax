@@ -267,7 +267,8 @@ function sensorsSection(plant) {
             class: hasValue ? 'sensor-value' : 'sensor-value unavailable',
             'aria-label': hasValue ? undefined : 'No reading',
           }, reading));
-      })));
+      })),
+    el('a', { class: 'muted small', href: '/setup.html' }, 'How to connect your sensors'));
 }
 
 function healthChart(checkups) {

@@ -1188,6 +1188,24 @@ test('#dlg-plant renders all 4 sensors with statuses, formatting, and defined CS
   assert.deepEqual(offlineValues, ['—', '—', '—', '—']);
 });
 
+test('setup page and sketch are served, and the sketch has every setting the page fills in', async (t) => {
+  const { call } = await start(t);
+
+  const page = await call('GET', '/setup.html');
+  assert.equal(page.status, 200);
+  assert.match(page.body, /Sensor setup/);
+  assert.match(page.body, /id="s-download"/);
+
+  const script = await call('GET', '/setup.js');
+  assert.equal(script.status, 200);
+
+  const sketch = await call('GET', '/arduino/watermi_esp32/watermi_esp32.ino');
+  assert.equal(sketch.status, 200);
+  for (const name of ['WIFI_SSID', 'WIFI_PASSWORD', 'SERVER_URL', 'PLANT_ID', 'SENSOR_KEY']) {
+    assert.match(sketch.body, new RegExp(`const char\\* ${name}\\s*=\\s*"[^"]*";`), `${name} missing from sketch`);
+  }
+});
+
 test('POST /api/plants/:id/sensors accepts ESP32 payloads and marks stale readings disconnected', async (t) => {
   const { call } = await start(t, { sensorTimeoutMs: 40 });
   const plant = (await call('POST', '/api/plants', { name: 'ESP32 Tomato' })).body;
