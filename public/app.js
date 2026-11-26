@@ -17,6 +17,12 @@ const QUOTA_MESSAGE = 'Daily free limit reached. Try again later.';
 
 let plants = [];
 
+// ---------- Setup state ----------
+let setupPlants = [];
+let setupSketch = '';
+let setupPollTimer = null;
+let setupViewActive = false;
+
 // ---------- DOM helpers (text is always added as text nodes, never as HTML) ----------
 
 function build(node, props, children) {
@@ -124,7 +130,8 @@ const needsAttention = (plant) => {
 // ---------- navigation ----------
 
 function showView(name) {
-  const view = ['dashboard', 'analyze', 'chat'].includes(name) ? name : 'dashboard';
+  const view = ['dashboard', 'analyze', 'chat', 'setup'].includes(name) ? name : 'dashboard';
+  const wasSetup = document.getElementById('view-setup')?.classList.contains('active') ?? false;
   for (const section of document.querySelectorAll('.view')) {
     section.classList.toggle('active', section.id === `view-${view}`);
   }
@@ -135,6 +142,13 @@ function showView(name) {
   history.replaceState(null, '', `#${view}`);
   window.scrollTo(0, 0);
   if (view === 'chat') scrollChat();
+
+  // Handle setup view polling
+  if (view === 'setup' && !wasSetup) {
+    startSetupPolling();
+  } else if (wasSetup && view !== 'setup') {
+    stopSetupPolling();
+  }
 }
 
 function fillSelect(select, firstLabel) {
@@ -238,6 +252,13 @@ const SENSORS = [
   { key: 'temperature', label: 'Temperature', unit: '°C' },
   { key: 'soilMoisture', label: 'Soil moisture', unit: '%' },
   { key: 'light', label: 'Light', unit: 'lux' },
+];
+
+const SETUP_SENSORS = [
+  ['humidity', 'Humidity'],
+  ['temperature', 'Temperature'],
+  ['soilMoisture', 'Soil moisture'],
+  ['light', 'Light'],
 ];
 
 function formatSensorReading(sensor, defaultUnit) {
@@ -869,6 +890,230 @@ async function init() {
   } catch (err) {
     showBanner(friendly(err));
   }
+  initSetup();
 }
+
+// ---------- setup view ----------
+
+async function loadSetupSketch() {
+  try {
+    const res = await fetch('/arduino/watermi_esp32/watermi_esp32.ino');
+    if (res.ok) setupSketch = await res.text();
+  } catch {
+    // The download button stays disabled without the sketch.
+  }
+}
+
+function setConst(source, name, value) {
+  return source.replace(
+    new RegExp(`(const char\\* ${name}\\s*=\\s*)"[^"]*";`),
+    (_, head) => `${head}"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}";`,
+  );
+}
+
+function setDefine(source, name, value) {
+  return source.replace(
+    new RegExp(`(#define ${name}\\s+)\\d+`),
+    (_, head) => `${head}${value}`,
+  );
+}
+
+function setIntConst(source, name, value) {
+  return source.replace(
+    new RegExp(`(const int ${name}\\s*=\\s*)\\d+`),
+    (_, head) => `${head}${value}`,
+  );
+}
+
+function setBoolConst(source, name, value) {
+  return source.replace(
+    new RegExp(`(const bool ${name}\\s*=\\s*)(true|false)`),
+    (_, head) => `${head}${value}`,
+  );
+}
+
+function setupValues() {
+  return {
+    WIFI_SSID: $('#s-ssid').value.trim(),
+    WIFI_PASSWORD: $('#s-pass').value,
+    SERVER_URL: $('#s-url').value.trim().replace(/\/+$/, ''),
+    PLANT_ID: $('#s-plant').value,
+    SENSOR_KEY: $('#s-key').value.trim(),
+    SEND_INTERVAL_MS: $('#s-interval').value,
+    SOIL_DRY_RAW: $('#s-dry').value,
+    SOIL_WET_RAW: $('#s-wet').value,
+    LIGHT_SENSOR_ENABLED: $('#s-light').value,
+    DHTPIN: $('#s-dhtpin').value,
+    soilMoisturePin: $('#s-soilpin').value,
+    lightPin: $('#s-lightpin').value,
+  };
+}
+
+function buildSketch() {
+  let out = setupSketch;
+  const v = setupValues();
+
+  // String constants
+  out = setConst(out, 'WIFI_SSID', v.WIFI_SSID);
+  out = setConst(out, 'WIFI_PASSWORD', v.WIFI_PASSWORD);
+  out = setConst(out, 'SERVER_URL', v.SERVER_URL);
+  out = setConst(out, 'PLANT_ID', v.PLANT_ID);
+  out = setConst(out, 'SENSOR_KEY', v.SENSOR_KEY);
+
+  // Numeric constants (int)
+  out = setIntConst(out, 'soilMoisturePin', v.soilMoisturePin);
+  out = setIntConst(out, 'lightPin', v.lightPin);
+  out = setIntConst(out, 'SOIL_DRY_RAW', v.SOIL_DRY_RAW);
+  out = setIntConst(out, 'SOIL_WET_RAW', v.SOIL_WET_RAW);
+  out = setIntConst(out, 'SEND_INTERVAL_MS', v.SEND_INTERVAL_MS);
+
+  // Boolean constant
+  out = setBoolConst(out, 'LIGHT_SENSOR_ENABLED', v.LIGHT_SENSOR_ENABLED);
+
+  // #define
+  out = setDefine(out, 'DHTPIN', v.DHTPIN);
+
+  return out;
+}
+
+function refreshSetupForm() {
+  const v = setupValues();
+  $('#s-preview').textContent = [
+    `WIFI_SSID           = "${v.WIFI_SSID}"`,
+    `WIFI_PASSWORD       = "${v.WIFI_PASSWORD ? '********' : ''}"`,
+    `SERVER_URL          = "${v.SERVER_URL}"`,
+    `PLANT_ID            = "${v.PLANT_ID}"`,
+    `SENSOR_KEY          = "${v.SENSOR_KEY ? '********' : ''}"`,
+    `SEND_INTERVAL_MS    = ${v.SEND_INTERVAL_MS}`,
+    `SOIL_DRY_RAW        = ${v.SOIL_DRY_RAW}`,
+    `SOIL_WET_RAW        = ${v.SOIL_WET_RAW}`,
+    `LIGHT_SENSOR_ENABLED= ${v.LIGHT_SENSOR_ENABLED}`,
+    `DHTPIN              = ${v.DHTPIN}`,
+    `soilMoisturePin     = ${v.soilMoisturePin}`,
+    `lightPin            = ${v.lightPin}`,
+  ].join('\n');
+  $('#s-download').disabled = !(setupSketch && v.WIFI_SSID && v.SERVER_URL && v.PLANT_ID);
+}
+
+function renderLiveSetup() {
+  const plant = setupPlants.find((p) => p.id === $('#s-plant').value);
+  const box = $('#live');
+  box.replaceChildren();
+  if (!plant) {
+    $('#live-msg').textContent = 'Choose a plant in step 2.';
+    return;
+  }
+  const sensors = plant.sensors ?? {};
+  const any = SETUP_SENSORS.some(([key]) => sensors[key]?.connected);
+  $('#live-msg').textContent = any
+    ? 'The board is sending data. This page refreshes every 3 seconds.'
+    : 'Waiting for the board. Readings appear here a few seconds after it connects.';
+  for (const [key, label] of SETUP_SENSORS) {
+    const s = sensors[key] ?? {};
+    const connected = Boolean(s.connected);
+    const hasValue = connected && Number.isFinite(s.value);
+    const item = document.createElement('div');
+    item.className = 'stat';
+    const name = document.createElement('span');
+    name.textContent = label;
+    const value = document.createElement('strong');
+    value.textContent = hasValue ? `${s.value}${s.unit === 'lux' ? ' lux' : (s.unit ?? '')}` : '—';
+    const badge = document.createElement('span');
+    badge.className = `badge ${connected ? 'healthy' : 'none'}`;
+    badge.textContent = connected ? 'Connected' : 'Not connected';
+    item.append(name, value, badge);
+    box.append(item);
+  }
+}
+
+async function loadSetupPlants() {
+  try {
+    const res = await fetch('/api/plants');
+    if (!res.ok) return;
+    const latest = await res.json();
+    const first = !setupPlants.length;
+    setupPlants = latest;
+    const select = $('#s-plant');
+    const current = select.value;
+    select.replaceChildren(...setupPlants.map((p) => {
+      const option = document.createElement('option');
+      option.value = p.id;
+      option.textContent = p.name;
+      return option;
+    }));
+    if (setupPlants.some((p) => p.id === current)) select.value = current;
+    $('#s-noplant').hidden = setupPlants.length > 0;
+    if (first) refreshSetupForm();
+    renderLiveSetup();
+  } catch {
+    // The next poll tries again.
+  }
+}
+
+function stopSetupPolling() {
+  if (setupPollTimer && typeof clearInterval === 'function') {
+    clearInterval(setupPollTimer);
+  }
+  setupPollTimer = null;
+  setupViewActive = false;
+}
+
+function startSetupPolling() {
+  stopSetupPolling();
+  setupViewActive = true;
+  if (typeof setInterval === 'function') {
+    setupPollTimer = setInterval(loadSetupPlants, 3000);
+  }
+}
+
+function populatePinDropdowns() {
+  const dhtPins = [0, 1, 2, 3, 4, 5, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33];
+  const adc1Pins = [32, 33, 34, 35, 36, 37, 38, 39];
+
+  function fillSelect(id, options, defaultVal) {
+    const sel = $(id);
+    sel.replaceChildren(...options.map((n) => {
+      const opt = document.createElement('option');
+      opt.value = n;
+      opt.textContent = `GPIO ${n}`;
+      if (n === defaultVal) opt.selected = true;
+      return opt;
+    }));
+  }
+
+  fillSelect('#s-dhtpin', dhtPins, 4);
+  fillSelect('#s-soilpin', adc1Pins, 34);
+  fillSelect('#s-lightpin', adc1Pins, 35);
+}
+
+function initSetup() {
+  $('#s-url').value = location.origin;
+  populatePinDropdowns();
+  const lastPlant = localStorage.getItem('watermi.setup.plant');
+  if (lastPlant) {
+    const select = $('#s-plant');
+    // Will be set after plants load
+  }
+  for (const id of ['#s-ssid', '#s-pass', '#s-url', '#s-key', '#s-interval', '#s-dry', '#s-wet', '#s-light', '#s-dhtpin', '#s-soilpin', '#s-lightpin']) {
+    $(id).addEventListener('input', refreshSetupForm);
+  }
+  $('#s-plant').addEventListener('change', () => {
+    localStorage.setItem('watermi.setup.plant', $('#s-plant').value);
+    refreshSetupForm();
+    renderLiveSetup();
+  });
+  $('#s-download').addEventListener('click', () => {
+    const url = URL.createObjectURL(new Blob([buildSketch()], { type: 'text/plain' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'watermi_esp32.ino';
+    link.click();
+    URL.revokeObjectURL(url);
+  });
+  loadSetupSketch();
+  loadSetupPlants();
+}
+
+// ---------- analysis ----------
 
 init();

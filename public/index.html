@@ -20,6 +20,7 @@
       <button type="button" data-view="dashboard">Dashboard</button>
       <button type="button" data-view="analyze">Analyze</button>
       <button type="button" data-view="chat">Chat</button>
+      <button type="button" data-view="setup">Sensors</button>
     </nav>
   </header>
 
@@ -71,6 +72,107 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M13 5l7 7-7 7"/></svg>
         </button>
       </form>
+    </section>
+
+    <section id="view-setup" class="view" aria-labelledby="h-setup">
+      <h1 id="h-setup">Connect ESP32 sensors</h1>
+      <p class="muted">Pick a plant, enter Wi-Fi, download the sketch, flash it. Readings appear below.</p>
+
+      <section class="card">
+        <h2>Wiring</h2>
+        <div style="display:grid;gap:8px;font-size:15px;">
+          <div><strong>DHT22</strong> — DATA → GPIO 4, VCC → 3.3V, GND → GND</div>
+          <div><strong>Soil moisture</strong> — AO → GPIO 34, VCC → 3.3V, GND → GND</div>
+          <div class="muted small"><strong>Light (optional)</strong> — AO → GPIO 35. Enable <code>LIGHT_SENSOR_ENABLED = true</code> in sketch.</div>
+        </div>
+        <p class="muted small">Bare DHT22 needs 10 kΩ pull-up between DATA and 3.3V. ESP32 needs 2.4 GHz Wi-Fi.</p>
+      </section>
+
+      <section class="card">
+        <h2>Generate sketch</h2>
+        <div class="field">
+          <label for="s-plant">Plant</label>
+          <select id="s-plant"></select>
+          <p id="s-noplant" class="muted small" hidden>No plants yet. Add one first.</p>
+        </div>
+        <div class="field">
+          <label for="s-ssid">Wi-Fi name (2.4 GHz)</label>
+          <input id="s-ssid" autocomplete="off" placeholder="MyHomeWifi">
+        </div>
+        <div class="field">
+          <label for="s-pass">Wi-Fi password</label>
+          <input id="s-pass" type="password" autocomplete="off" placeholder="Never leaves your browser">
+        </div>
+        <div class="field">
+          <label for="s-url">WaterMI URL</label>
+          <input id="s-url" autocomplete="off" placeholder="http://192.168.x.x:3000">
+        </div>
+
+        <div class="field">
+          <label for="s-dhtpin">DHT22 data pin</label>
+          <select id="s-dhtpin"></select>
+          <p class="muted small">GPIO for DHT22 DATA (avoid 6-11 on most boards)</p>
+        </div>
+        <div class="field">
+          <label for="s-soilpin">Soil moisture pin (ADC1)</label>
+          <select id="s-soilpin"></select>
+          <p class="muted small">ADC1 pins work with Wi-Fi active (32-39)</p>
+        </div>
+        <div class="field">
+          <label for="s-lightpin">Light sensor pin (ADC1)</label>
+          <select id="s-lightpin"></select>
+          <p class="muted small">ADC1 pins work with Wi-Fi active (32-39)</p>
+        </div>
+        <div class="field">
+          <label for="s-light">Enable light sensor</label>
+          <select id="s-light">
+            <option value="false">No</option>
+            <option value="true">Yes</option>
+          </select>
+        </div>
+
+        <details style="margin-top:12px;">
+          <summary>Advanced options</summary>
+          <div class="field" style="margin-top:8px;">
+            <label for="s-interval">Send interval (ms)</label>
+            <input id="s-interval" type="number" min="1000" step="500" value="2000" placeholder="2000">
+            <p class="muted small">How often to upload readings (min 1000ms)</p>
+          </div>
+          <div class="field">
+            <label for="s-dry">Soil dry raw value</label>
+            <input id="s-dry" type="number" min="0" max="4095" value="4095" placeholder="4095">
+            <p class="muted small">Measure in dry air, then adjust</p>
+          </div>
+          <div class="field">
+            <label for="s-wet">Soil wet raw value</label>
+            <input id="s-wet" type="number" min="0" max="4095" value="0" placeholder="0">
+            <p class="muted small">Measure in water, then adjust</p>
+          </div>
+          <div class="field">
+            <label for="s-key">Sensor key (optional)</label>
+            <input id="s-key" autocomplete="off" placeholder="Only if SENSOR_KEY set on server">
+          </div>
+          <p class="muted small">After downloading, open the sketch to edit sensor type or other settings.</p>
+        </details>
+        <button type="button" id="s-download" class="btn primary big" disabled>Download sketch</button>
+      </section>
+
+      <section class="card" aria-live="polite">
+        <h2>Live check</h2>
+        <p id="live-msg" class="muted">Select a plant above to see live readings.</p>
+        <div id="live" class="live"></div>
+      </section>
+
+      <details class="card">
+        <summary>Troubleshooting</summary>
+        <ul style="margin:12px 0 0 18px;line-height:1.8;font-size:15px;">
+          <li><strong>No POST 200:</strong> check Wi-Fi name/password (2.4 GHz only)</li>
+          <li><strong>POST 404:</strong> plant deleted or server reset — regenerate sketch</li>
+          <li><strong>POST 401:</strong> sensor key mismatch</li>
+          <li><strong>Temp/humidity "Not connected":</strong> check DHT22 wiring on GPIO 4 + pull-up resistor</li>
+          <li><strong>All sensors drop after ~30s:</strong> board stopped — check power/Wi-Fi</li>
+        </ul>
+      </details>
     </section>
   </main>
 

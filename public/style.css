@@ -76,7 +76,7 @@ p { margin: 0; }
   inset: auto 0 0 0;
   z-index: 5;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   height: var(--tabs-h);
   padding-bottom: env(safe-area-inset-bottom);
   background: var(--card);
@@ -312,6 +312,21 @@ div.detail-photo svg { width: 80px; height: 80px; fill: none; stroke: var(--gree
   #view-chat.active { width: min(780px, 100%); margin: 0 auto; }
   #chips { flex-direction: row; flex-wrap: wrap; }
 }
+
+/* ---------- setup view ---------- */
+
+.live { display: grid; gap: 10px; }
+.live .stat { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; padding: 10px 12px; }
+.live .stat span:first-child { font-weight: 600; }
+.live .stat strong { font-family: var(--serif); font-size: 22px; text-align: right; min-width: 80px; }
+.live .stat .badge { font-size: 13px; }
+
+details summary { cursor: pointer; font-weight: 600; color: var(--muted); }
+details summary:hover { color: var(--ink); }
+details pre { margin-top: 10px; padding: 12px; border-radius: 10px; background: var(--card); font-size: 14px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+
+#view-setup h2 { font-size: 21px; margin: 0 0 12px; }
+#view-setup .card + .card { margin-top: 16px; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }

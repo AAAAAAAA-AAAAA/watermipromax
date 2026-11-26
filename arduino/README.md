@@ -41,19 +41,40 @@ GPIO 34 and 35 are on ADC1, which keeps working while Wi-Fi is on. A bare DHT22 
 
 ## Editing the sketch by hand
 
-If you would rather not use the setup page, open [watermi_esp32/watermi_esp32.ino](watermi_esp32/watermi_esp32.ino) and edit the lines at the top:
+Open [watermi_esp32/watermi_esp32.ino](watermi_esp32/watermi_esp32.ino) and customize these constants at the top:
 
 ```cpp
+// Wi-Fi credentials
 const char* WIFI_SSID     = "YOUR_WIFI_NAME";
 const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+
+// WaterMI server URL
 const char* SERVER_URL    = "https://your-app.onrender.com";
 const char* PLANT_ID      = "YOUR_PLANT_ID";
 const char* SENSOR_KEY    = "";
+
+// Pin assignments (edit these to match your wiring)
+#define DHTPIN  4               // DHT22 data pin
+const int soilMoisturePin = 34; // Soil moisture AO pin
+const bool LIGHT_SENSOR_ENABLED = false;  // Set to true to enable light sensor
+const int  lightPin             = 35;     // Light sensor AO pin
+
+// Soil calibration (adjust based on your sensor)
+const int SOIL_DRY_RAW = 4095;   // Raw value in dry air
+const int SOIL_WET_RAW = 0;      // Raw value in water
+
+// How often to send readings (milliseconds)
+const unsigned long SEND_INTERVAL_MS = 2000;
 ```
 
-- `SERVER_URL`: your deployed `https://` address, or `http://YOUR-PC-IP:PORT` when WaterMI runs on a computer on the same Wi-Fi (set `HOST=0.0.0.0` in `.env` for that).
-- `PLANT_ID`: the `id` of your plant from `/api/plants`.
-- `SENSOR_KEY`: leave empty unless you set `SENSOR_KEY` on the server.
+### Customization Options
+
+- **SERVER_URL**: Use your deployed `https://` address, or `http://YOUR-PC-IP:PORT` when WaterMI runs on the same Wi-Fi (set `HOST=0.0.0.0` in `.env`).
+- **PLANT_ID**: The `id` of your plant from `/api/plants`.
+- **SENSOR_KEY**: Leave empty unless you set `SENSOR_KEY` on the server.
+- **LIGHT_SENSOR_ENABLED**: Set to `true` and wire an analog light sensor to GPIO 35.
+- **SOIL_DRY_RAW / SOIL_WET_RAW**: Calibrate for your specific sensor (measure in dry air and in water).
+- **SEND_INTERVAL_MS**: Lower for faster updates (minimum 1000ms), higher for less frequent uploads.
 
 ## Soil moisture calibration
 

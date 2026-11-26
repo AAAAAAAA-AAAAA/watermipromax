@@ -21,15 +21,18 @@ const char* SENSOR_KEY    = "";              // Optional: must match SENSOR_KEY 
 const int soilMoisturePin = 34; // Soil moisture sensor AO connected to GPIO 34
 
 // Optional analog light sensor (LDR / TEMT6000) on GPIO 35
+// Set to true and connect AO to GPIO 35 to enable light readings
 const bool LIGHT_SENSOR_ENABLED = false;
 const int  lightPin             = 35;
 
-// Soil calibration (ESP32 ADC is 0..4095)
-// Measure soilRaw in dry air and in a cup of water, then adjust these values.
-const int SOIL_DRY_RAW = 4095;
-const int SOIL_WET_RAW = 0;
+// Soil moisture calibration (ESP32 ADC is 0..4095)
+// Adjust these values based on your sensor:
+// - SOIL_DRY_RAW: Measure in dry air (typically 3000-4000)
+// - SOIL_WET_RAW: Measure in water (typically 0-1000)
+const int SOIL_DRY_RAW = 4095;  // Raw value in dry conditions
+const int SOIL_WET_RAW = 0;     // Raw value in wet conditions
 
-// How often to send readings (ms)
+// How often to send sensor readings (ms)
 const unsigned long SEND_INTERVAL_MS = 2000;
 
 DHT dht(DHTPIN, DHTTYPE);
@@ -80,12 +83,14 @@ void loop() {
   String lightJson = "null";
   if (LIGHT_SENSOR_ENABLED) {
     int lightRaw = analogRead(lightPin);
+    // Convert ADC reading (0-4095) to approximate lux (0-20000)
     int lightLux = map(lightRaw, 0, 4095, 0, 20000);
     lightLux = constrain(lightLux, 0, 20000);
     lightJson = String(lightLux);
   }
 
-  // Build JSON payload (null marks a sensor as Not connected in WaterMI)
+  // Build JSON payload for WaterMI
+  // null values mark sensors as "Not connected"
   String humidityJson = isnan(humidity) ? "null" : String(humidity, 1);
   String tempJson     = isnan(temperatureC) ? "null" : String(temperatureC, 1);
   String soilJson     = String(moisturePercent);
@@ -116,7 +121,7 @@ void loop() {
 
   http.setTimeout(8000);
   if (isHttps) {
-    secureClient.setInsecure(); // Skip root CA pinning for easy cloud HTTPS deployment
+    secureClient.setInsecure(); // Skip CA verification for easy HTTPS deployment
     http.begin(secureClient, url);
   } else {
     http.begin(url);
