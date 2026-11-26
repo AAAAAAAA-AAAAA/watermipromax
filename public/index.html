@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1f4d3a">
+  <title>WaterMI</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%231f4d3a'/%3E%3Cpath d='M6 18C5 10 10 6 19 6c0 9-5 14-13 12zm0 0 8-8' fill='none' stroke='%23b5e26b' stroke-width='1.8'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19C4 10 10 4 20 4c0 10-6 16-15 15z"/><path d="M5 19l9-9"/></svg>
+      <span>WaterMI</span>
+      <span id="demo-tag" class="demo-tag" hidden>Demo</span>
+    </div>
+    <nav id="tabs" aria-label="Sections">
+      <button type="button" data-view="dashboard">Dashboard</button>
+      <button type="button" data-view="analyze">Analyze</button>
+      <button type="button" data-view="chat">Chat</button>
+    </nav>
+  </header>
+
+  <div id="banner" role="alert" hidden></div>
+
+  <main>
+    <section id="view-dashboard" class="view active" aria-labelledby="h-dashboard">
+      <div class="view-head">
+        <h1 id="h-dashboard">Your plants</h1>
+        <button type="button" id="add-plant-btn" class="btn primary">+ Add plant</button>
+      </div>
+      <div id="stats"></div>
+      <div id="plant-grid"></div>
+    </section>
+
+    <section id="view-analyze" class="view" aria-labelledby="h-analyze">
+      <h1 id="h-analyze">Deep Analysis</h1>
+      <div class="analyze-layout">
+        <div class="analyze-form">
+          <label for="an-plant">Save to plant</label>
+          <select id="an-plant"></select>
+
+          <div id="drop">
+            <img id="an-preview" alt="Preview of the chosen photo" hidden>
+            <label for="an-file" class="btn secondary">Take or choose a photo</label>
+            <input type="file" id="an-file" accept="image/*" class="visually-hidden">
+          </div>
+
+          <label for="an-note">What have you noticed? (optional)</label>
+          <textarea id="an-note" rows="3" maxlength="2000" placeholder="For example: spots on lower leaves since last week"></textarea>
+
+          <button type="button" id="an-run" class="btn primary big" disabled>Analyze</button>
+        </div>
+        <div id="an-result" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section id="view-chat" class="view" aria-labelledby="h-chat">
+      <h1 id="h-chat" class="visually-hidden">Chat</h1>
+      <div class="chat-bar">
+        <select id="chat-plant" aria-label="Chat about"></select>
+        <button type="button" id="chat-clear" class="btn quiet">Clear chat</button>
+      </div>
+      <div id="msgs" aria-live="polite"></div>
+      <div id="chips"></div>
+      <form id="composer">
+        <textarea id="chat-input" rows="1" maxlength="8000" aria-label="Message" placeholder="Ask about your plant..."></textarea>
+        <button type="submit" id="chat-send" class="btn primary" aria-label="Send">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M13 5l7 7-7 7"/></svg>
+        </button>
+      </form>
+    </section>
+  </main>
+
+  <dialog id="dlg-add" aria-labelledby="h-add">
+    <form id="form-add" method="dialog">
+      <h2 id="h-add">Add plant</h2>
+      <label for="f-name">Name</label>
+      <input id="f-name" required maxlength="80" placeholder="North field rice">
+      <label for="f-species">Species / crop</label>
+      <input id="f-species" maxlength="120" placeholder="Jasmine rice">
+      <label for="f-location">Location</label>
+      <input id="f-location" maxlength="120" placeholder="North field">
+      <label for="f-water">Water every (days)</label>
+      <input id="f-water" type="number" min="1" max="365" step="1" value="3" required inputmode="numeric">
+      <label for="f-notes">Notes</label>
+      <textarea id="f-notes" rows="3" maxlength="2000"></textarea>
+      <div class="row">
+        <button type="button" class="btn secondary" data-close>Cancel</button>
+        <button type="submit" class="btn primary">Add plant</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-plant" aria-label="Plant details">
+    <div id="plant-detail"></div>
+  </dialog>
+
+  <div id="toast" role="status"></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
