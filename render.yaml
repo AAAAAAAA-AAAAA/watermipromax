@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: watermi
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/config
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: DATA_DIR
+        value: /data
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: PLANTNET_API_KEY
+        sync: false
+      - key: SENSOR_KEY
+        sync: false
