@@ -54,7 +54,6 @@ test('config reports key and mode without exposing the key', async (t) => {
   assert.deepEqual(res.body, {
     hasKey: true, mock: false,
     analysisModel: 'gemini-3.8-flash', chatModel: 'gemini-3.5-flash-lite',
-    blynkEnabled: false,
   });
 });
 
@@ -1318,56 +1317,6 @@ test('POST /api/plants/:id/sensors accepts ESP32 payloads and marks stale readin
   for (const key of Object.keys(SENSOR_UNITS)) {
     assert.equal(after.sensors[key].connected, false);
   }
-});
-
-test('POST /api/plants/:id/sensors forwards readings to Blynk and blynk-sync pulls from Blynk', async (t) => {
-  const blynkRequests = [];
-  const fakeFetch = async (url) => {
-    blynkRequests.push(url);
-    if (url.includes('/batch/update')) {
-      return new Response('', { status: 200 });
-    }
-    if (url.includes('/getAll')) {
-      return new Response(JSON.stringify({ V0: '26.4', V1: '61.2', V2: '55', V3: '900' }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      });
-    }
-    if (url.includes('/isHardwareConnected')) {
-      return new Response('true', { status: 200 });
-    }
-    return new Response('not found', { status: 404 });
-  };
-
-  const { call } = await start(t, { blynkToken: 'test-blynk-token', fetch: fakeFetch });
-  const cfg = await call('GET', '/api/config');
-  assert.equal(cfg.body.blynkEnabled, true);
-
-  const plant = (await call('POST', '/api/plants', { name: 'Blynk Basil' })).body;
-  const pushed = await call('POST', `/api/plants/${plant.id}/sensors`, {
-    temperature: 25.1,
-    humidity: 58.3,
-    soilMoisture: 42,
-    light: null,
-  });
-  assert.equal(pushed.status, 200);
-  await new Promise((r) => setTimeout(r, 15));
-
-  const batchUrl = blynkRequests.find((u) => u.includes('/batch/update'));
-  assert.ok(batchUrl, 'expected Blynk batch/update call');
-  assert.match(batchUrl, /token=test-blynk-token/);
-  assert.match(batchUrl, /V0=25\.1/);
-  assert.match(batchUrl, /V1=58\.3/);
-  assert.match(batchUrl, /V2=42/);
-  assert.doesNotMatch(batchUrl, /V3=/);
-
-  const synced = await call('POST', `/api/plants/${plant.id}/blynk-sync`);
-  assert.equal(synced.status, 200);
-  assert.equal(synced.body.hardwareConnected, true);
-  assert.equal(synced.body.plant.sensors.temperature.value, 26.4);
-  assert.equal(synced.body.plant.sensors.humidity.value, 61.2);
-  assert.equal(synced.body.plant.sensors.soilMoisture.value, 55);
-  assert.equal(synced.body.plant.sensors.light.value, 900);
 });
 
 
