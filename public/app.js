@@ -131,7 +131,7 @@ const needsAttention = (plant) => {
 
 function showView(name) {
   const view = ['dashboard', 'analyze', 'chat', 'setup'].includes(name) ? name : 'dashboard';
-  const wasSetup = document.getElementById('view-setup')?.classList.contains('active') ?? false;
+  const wasSetup = $('#view-setup')?.classList.contains('active') ?? false;
   for (const section of document.querySelectorAll('.view')) {
     section.classList.toggle('active', section.id === `view-${view}`);
   }
@@ -289,22 +289,7 @@ function sensorsSection(plant) {
             'aria-label': hasValue ? undefined : 'No reading',
           }, reading));
       })),
-    el('div', { class: 'row', style: 'justify-content:space-between;align-items:center;margin-top:8px;gap:8px;' },
-      el('a', { class: 'muted small', href: '/setup.html' }, 'How to connect your sensors'),
-      el('button', {
-        type: 'button',
-        class: 'btn quiet small',
-        onClick: async (e) => {
-          const btn = e.currentTarget;
-          await act(btn, async () => {
-            const { plant: updated } = await api('POST', `/api/plants/${plant.id}/blynk-sync`);
-            replacePlant(updated);
-            renderDetail(plant.id);
-            toast('Synced from Blynk.');
-          });
-        },
-      }, 'Sync from Blynk')),
-  );
+    el('a', { class: 'muted small', href: '/setup.html' }, 'How to connect your sensors'));
 }
 
 function healthChart(checkups) {
@@ -916,7 +901,7 @@ async function init() {
 
 async function loadSetupSketch() {
   try {
-    const res = await fetch('/arduino/watermi_esp32/watermi_esp32.ino');
+    const res = await fetch('/arduino/watermi_blynk/watermi_blynk.ino');
     if (res.ok) setupSketch = await res.text();
   } catch {
     // The download button stays disabled without the sketch.
@@ -930,6 +915,13 @@ function setConst(source, name, value) {
   );
 }
 
+function setStringDefine(source, name, value) {
+  return source.replace(
+    new RegExp(`(#define ${name}\\s+)"[^"]*"`),
+    (_, head) => `${head}"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`,
+  );
+}
+
 function setDefine(source, name, value) {
   return source.replace(
     new RegExp(`(#define ${name}\\s+)\\d+`),
@@ -939,7 +931,7 @@ function setDefine(source, name, value) {
 
 function setIntConst(source, name, value) {
   return source.replace(
-    new RegExp(`(const int ${name}\\s*=\\s*)\\d+`),
+    new RegExp(`(const (?:unsigned long|int) ${name}\\s*=\\s*)\\d+`),
     (_, head) => `${head}${value}`,
   );
 }
@@ -955,9 +947,8 @@ function setupValues() {
   return {
     WIFI_SSID: $('#s-ssid').value.trim(),
     WIFI_PASSWORD: $('#s-pass').value,
-    SERVER_URL: $('#s-url').value.trim().replace(/\/+$/, ''),
-    PLANT_ID: $('#s-plant').value,
-    SENSOR_KEY: $('#s-key').value.trim(),
+    BLYNK_TEMPLATE_ID: $('#s-blynk-template').value.trim(),
+    BLYNK_AUTH_TOKEN: $('#s-blynk-auth').value,
     SEND_INTERVAL_MS: $('#s-interval').value,
     SOIL_DRY_RAW: $('#s-dry').value,
     SOIL_WET_RAW: $('#s-wet').value,
@@ -972,12 +963,11 @@ function buildSketch() {
   let out = setupSketch;
   const v = setupValues();
 
-  // String constants
+  // String constants & #define strings
   out = setConst(out, 'WIFI_SSID', v.WIFI_SSID);
   out = setConst(out, 'WIFI_PASSWORD', v.WIFI_PASSWORD);
-  out = setConst(out, 'SERVER_URL', v.SERVER_URL);
-  out = setConst(out, 'PLANT_ID', v.PLANT_ID);
-  out = setConst(out, 'SENSOR_KEY', v.SENSOR_KEY);
+  out = setStringDefine(out, 'BLYNK_TEMPLATE_ID', v.BLYNK_TEMPLATE_ID);
+  out = setStringDefine(out, 'BLYNK_AUTH_TOKEN', v.BLYNK_AUTH_TOKEN);
 
   // Numeric constants (int)
   out = setIntConst(out, 'soilMoisturePin', v.soilMoisturePin);
@@ -996,15 +986,14 @@ function buildSketch() {
 }
 
 function refreshSetupForm() {
+  const v = setupValues();
   const preview = $('#s-preview');
   if (preview) {
-    const v = setupValues();
     preview.textContent = [
       `WIFI_SSID           = "${v.WIFI_SSID}"`,
       `WIFI_PASSWORD       = "${v.WIFI_PASSWORD ? '********' : ''}"`,
-      `SERVER_URL          = "${v.SERVER_URL}"`,
-      `PLANT_ID            = "${v.PLANT_ID}"`,
-      `SENSOR_KEY          = "${v.SENSOR_KEY ? '********' : ''}"`,
+      `BLYNK_TEMPLATE_ID   = "${v.BLYNK_TEMPLATE_ID}"`,
+      `BLYNK_AUTH_TOKEN    = "${v.BLYNK_AUTH_TOKEN ? '********' : ''}"`,
       `SEND_INTERVAL_MS    = ${v.SEND_INTERVAL_MS}`,
       `SOIL_DRY_RAW        = ${v.SOIL_DRY_RAW}`,
       `SOIL_WET_RAW        = ${v.SOIL_WET_RAW}`,
@@ -1014,26 +1003,42 @@ function refreshSetupForm() {
       `lightPin            = ${v.lightPin}`,
     ].join('\n');
   }
-  const dl = $('#s-download');
-  if (dl) {
-    const v = setupValues();
-    dl.disabled = !(setupSketch && v.WIFI_SSID && v.SERVER_URL && v.PLANT_ID);
+  const plantId = $('#s-plant')?.value || '';
+  const plant = setupPlants.find((p) => p.id === plantId);
+  const connectBtn = $('#s-connect');
+  const disconnectBtn = $('#s-disconnect');
+  const connectHint = $('#connect-hint');
+  if (connectBtn) {
+    connectBtn.disabled = !(plantId && v.BLYNK_AUTH_TOKEN.trim());
+    connectBtn.textContent = plant?.blynkLinked ? 'Update Blynk token' : 'Connect Blynk to plant';
   }
+  if (disconnectBtn) disconnectBtn.hidden = !plant?.blynkLinked;
+  if (connectHint && plant) {
+    connectHint.textContent = plant.blynkLinked
+      ? `Blynk is connected to ${plant.name}. WaterMI pulls live sensor readings automatically.`
+      : 'Paste your Blynk Auth Token and click Connect so WaterMI reads live data automatically.';
+  }
+  $('#s-download').disabled = !(setupSketch && v.WIFI_SSID && v.BLYNK_TEMPLATE_ID && v.BLYNK_AUTH_TOKEN);
 }
 
 function renderLiveSetup() {
-  const plant = setupPlants.find((p) => p.id === $('#s-plant').value);
   const box = $('#live');
+  if (!box) return;
+  const select = $('#s-plant');
+  const plant = select ? setupPlants.find((p) => p.id === select.value) : setupPlants[0];
   box.replaceChildren();
+  const msg = $('#live-msg');
   if (!plant) {
-    $('#live-msg').textContent = 'Choose a plant in step 2.';
+    if (msg) msg.textContent = 'Add a plant on the Dashboard first.';
     return;
   }
   const sensors = plant.sensors ?? {};
   const any = SETUP_SENSORS.some(([key]) => sensors[key]?.connected);
-  $('#live-msg').textContent = any
-    ? 'The board is sending data. This page refreshes every 3 seconds.'
-    : 'Waiting for the board. Readings appear here a few seconds after it connects.';
+  if (msg) {
+    msg.textContent = any
+      ? 'The board is sending data. This page refreshes every 3 seconds.'
+      : 'Waiting for the board. Readings appear here a few seconds after it connects.';
+  }
   for (const [key, label] of SETUP_SENSORS) {
     const s = sensors[key] ?? {};
     const connected = Boolean(s.connected);
@@ -1060,15 +1065,18 @@ async function loadSetupPlants() {
     const first = !setupPlants.length;
     setupPlants = latest;
     const select = $('#s-plant');
-    const current = select.value;
-    select.replaceChildren(...setupPlants.map((p) => {
-      const option = document.createElement('option');
-      option.value = p.id;
-      option.textContent = p.name;
-      return option;
-    }));
-    if (setupPlants.some((p) => p.id === current)) select.value = current;
-    $('#s-noplant').hidden = setupPlants.length > 0;
+    if (select) {
+      const current = select.value;
+      select.replaceChildren(...setupPlants.map((p) => {
+        const option = document.createElement('option');
+        option.value = p.id;
+        option.textContent = p.name;
+        return option;
+      }));
+      if (setupPlants.some((p) => p.id === current)) select.value = current;
+    }
+    const noplant = $('#s-noplant');
+    if (noplant) noplant.hidden = setupPlants.length > 0;
     if (first) refreshSetupForm();
     renderLiveSetup();
   } catch {
@@ -1087,6 +1095,7 @@ function stopSetupPolling() {
 function startSetupPolling() {
   stopSetupPolling();
   setupViewActive = true;
+  loadSetupPlants();
   if (typeof setInterval === 'function') {
     setupPollTimer = setInterval(loadSetupPlants, 3000);
   }
@@ -1098,7 +1107,6 @@ function populatePinDropdowns() {
 
   function fillSelect(id, options, defaultVal) {
     const sel = $(id);
-    if (!sel) return;
     sel.replaceChildren(...options.map((n) => {
       const opt = document.createElement('option');
       opt.value = n;
@@ -1113,38 +1121,86 @@ function populatePinDropdowns() {
   fillSelect('#s-lightpin', adc1Pins, 35);
 }
 
+function updateWiringDiagram() {
+  $('#w-dhtpin').textContent = `GPIO ${$('#s-dhtpin').value}`;
+  $('#w-soilpin').textContent = `GPIO ${$('#s-soilpin').value}`;
+  $('#w-lightpin').textContent = `GPIO ${$('#s-lightpin').value}`;
+}
+
 function initSetup() {
-  const urlInput = $('#s-url');
-  if (urlInput) urlInput.value = location.origin;
   populatePinDropdowns();
-  const lastPlant = localStorage.getItem('watermi.setup.plant');
-  if (lastPlant) {
-    const select = $('#s-plant');
-    // Will be set after plants load
-  }
-  for (const id of ['#s-ssid', '#s-pass', '#s-url', '#s-key', '#s-interval', '#s-dry', '#s-wet', '#s-light', '#s-dhtpin', '#s-soilpin', '#s-lightpin']) {
-    const elNode = $(id);
-    if (elNode) elNode.addEventListener('input', refreshSetupForm);
+  updateWiringDiagram();
+  for (const id of ['#s-ssid', '#s-pass', '#s-blynk-template', '#s-blynk-auth', '#s-interval', '#s-dry', '#s-wet', '#s-light', '#s-dhtpin', '#s-soilpin', '#s-lightpin']) {
+    $(id).addEventListener('input', refreshSetupForm);
   }
   const plantSelect = $('#s-plant');
   if (plantSelect) {
     plantSelect.addEventListener('change', () => {
-      localStorage.setItem('watermi.setup.plant', plantSelect.value);
       refreshSetupForm();
       renderLiveSetup();
     });
   }
-  const downloadBtn = $('#s-download');
-  if (downloadBtn) {
-    downloadBtn.addEventListener('click', () => {
-      const url = URL.createObjectURL(new Blob([buildSketch()], { type: 'text/plain' }));
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'watermi_esp32.ino';
-      link.click();
-      URL.revokeObjectURL(url);
+  const connectBtn = $('#s-connect');
+  if (connectBtn) {
+    connectBtn.addEventListener('click', async () => {
+      const plantId = $('#s-plant')?.value;
+      const token = $('#s-blynk-auth').value.trim();
+      if (!plantId || !token) return;
+      connectBtn.disabled = true;
+      try {
+        const updated = await api('PATCH', `/api/plants/${plantId}`, { blynkToken: token });
+        replacePlant(updated);
+        setupPlants = plants;
+        refreshSetupForm();
+        renderLiveSetup();
+        toast(`Connected Blynk to ${updated.name}`);
+      } catch (err) {
+        toast(friendly(err));
+      } finally {
+        refreshSetupForm();
+      }
     });
   }
+  const disconnectBtn = $('#s-disconnect');
+  if (disconnectBtn) {
+    disconnectBtn.addEventListener('click', async () => {
+      const plantId = $('#s-plant')?.value;
+      if (!plantId) return;
+      disconnectBtn.disabled = true;
+      try {
+        const updated = await api('PATCH', `/api/plants/${plantId}`, { blynkToken: '' });
+        replacePlant(updated);
+        setupPlants = plants;
+        refreshSetupForm();
+        renderLiveSetup();
+        toast(`Disconnected Blynk from ${updated.name}`);
+      } catch (err) {
+        toast(friendly(err));
+      } finally {
+        disconnectBtn.disabled = false;
+        refreshSetupForm();
+      }
+    });
+  }
+  // Also update wiring diagram when pin dropdowns change
+  for (const id of ['#s-dhtpin', '#s-soilpin', '#s-lightpin']) {
+    $(id).addEventListener('change', updateWiringDiagram);
+  }
+  $('#s-download').addEventListener('click', () => {
+    const sketch = buildSketch();
+    const url = URL.createObjectURL(new Blob([sketch], { type: 'text/plain' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'watermi_blynk.ino';
+    link.click();
+    URL.revokeObjectURL(url);
+    // Provide feedback
+    const hint = $('#download-hint');
+    hint.textContent = 'Sketch downloaded! Open it in Arduino IDE to flash your ESP32.';
+    hint.className = 'muted small ok-bg';
+    // Re-enable after a moment so they can download again
+    setTimeout(() => { hint.textContent = 'Enter Wi-Fi, Blynk Template ID & Auth Token, then click Download sketch.'; hint.className = 'muted small'; }, 5000);
+  });
   loadSetupSketch();
   loadSetupPlants();
 }
