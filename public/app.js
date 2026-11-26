@@ -896,7 +896,7 @@ async function init() {
   try {
     const [config] = await Promise.all([api('GET', '/api/config'), loadPlants()]);
     $('#demo-tag').hidden = !config.mock;
-    if (config.blynkTemplateId && $('#s-blynk-template') && !$('#s-blynk-template').value) {
+    if (config.blynkTemplateId && $('#s-blynk-template')) {
       $('#s-blynk-template').value = config.blynkTemplateId;
       refreshSetupForm();
     }
