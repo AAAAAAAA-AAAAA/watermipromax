@@ -1188,22 +1188,106 @@ test('#dlg-plant renders all 4 sensors with statuses, formatting, and defined CS
   assert.deepEqual(offlineValues, ['—', '—', '—', '—']);
 });
 
-test('setup page and sketch are served, and the sketch has every setting the page fills in', async (t) => {
+test('setup view and Blynk sketch are served with every configurable setting', async (t) => {
   const { call } = await start(t);
 
-  const page = await call('GET', '/setup.html');
+  const page = await call('GET', '/');
   assert.equal(page.status, 200);
-  assert.match(page.body, /Sensor setup/);
+  assert.match(page.body, /id="view-setup"/);
   assert.match(page.body, /id="s-download"/);
 
-  const script = await call('GET', '/setup.js');
-  assert.equal(script.status, 200);
-
-  const sketch = await call('GET', '/arduino/watermi_esp32/watermi_esp32.ino');
+  const sketch = await call('GET', '/arduino/watermi_blynk/watermi_blynk.ino');
   assert.equal(sketch.status, 200);
-  for (const name of ['WIFI_SSID', 'WIFI_PASSWORD', 'SERVER_URL', 'PLANT_ID', 'SENSOR_KEY']) {
-    assert.match(sketch.body, new RegExp(`const char\\* ${name}\\s*=\\s*"[^"]*";`), `${name} missing from sketch`);
+  for (const name of ['BLYNK_TEMPLATE_ID', 'BLYNK_TEMPLATE_NAME', 'BLYNK_AUTH_TOKEN']) {
+    assert.match(sketch.body, new RegExp(`#define ${name}\\s+"[^"]*"`), `${name} missing from Blynk sketch`);
   }
+  for (const name of ['WIFI_SSID', 'WIFI_PASSWORD']) {
+    assert.match(sketch.body, new RegExp(`const char\\* ${name}\\s*=\\s*"[^"]*";`), `${name} missing from Blynk sketch`);
+  }
+});
+
+test('Blynk webhook supports batch and partial virtual-pin updates without wiping other sensors', async (t) => {
+  const { call } = await start(t);
+  const plant = (await call('POST', '/api/plants', { name: 'Blynk Tomato' })).body;
+
+  const first = await call('POST', '/api/webhook/blynk', {
+    values: { V0: 65.4, V1: 28.2 },
+  });
+  assert.equal(first.status, 200);
+  assert.equal(first.body.id, plant.id);
+  assert.equal(first.body.sensors.humidity.connected, true);
+  assert.equal(first.body.sensors.humidity.value, 65.4);
+  assert.equal(first.body.sensors.temperature.connected, true);
+  assert.equal(first.body.sensors.temperature.value, 28.2);
+  assert.equal(first.body.sensors.soilMoisture.connected, false);
+
+  // Single-pin update should keep V0 and V1 intact
+  const second = await call('POST', '/api/webhook/blynk', { pin: 'V2', value: '52' });
+  assert.equal(second.status, 200);
+  assert.equal(second.body.sensors.humidity.connected, true);
+  assert.equal(second.body.sensors.humidity.value, 65.4);
+  assert.equal(second.body.sensors.soilMoisture.connected, true);
+  assert.equal(second.body.sensors.soilMoisture.value, 52);
+});
+
+test('BLYNK_AUTH_TOKEN automatically syncs live sensor values and hardware online status', async (t) => {
+  let online = true;
+  const fakeFetch = async (url) => {
+    const u = String(url);
+    if (u.includes('/external/api/isHardwareConnected')) {
+      return new Response(online ? 'true' : 'false', { status: 200 });
+    }
+    if (u.includes('/external/api/get')) {
+      return Response.json({ v0: 71.24, v1: 26.8, v2: 44, v3: 12000 });
+    }
+    throw new Error(`Unexpected fetch: ${u}`);
+  };
+
+  const { call } = await start(t, { blynkToken: 'tok-123', fetch: fakeFetch });
+  const plant = (await call('POST', '/api/plants', { name: 'Cloud Basil' })).body;
+
+  const list = await call('GET', '/api/plants');
+  assert.equal(list.status, 200);
+  const synced = list.body.find((p) => p.id === plant.id);
+  assert.equal(synced.sensors.humidity.connected, true);
+  assert.equal(synced.sensors.humidity.value, 71.2);
+  assert.equal(synced.sensors.temperature.connected, true);
+  assert.equal(synced.sensors.temperature.value, 26.8);
+  assert.equal(synced.sensors.soilMoisture.connected, true);
+  assert.equal(synced.sensors.soilMoisture.value, 44);
+  assert.equal(synced.sensors.light.connected, true);
+  assert.equal(synced.sensors.light.value, 12000);
+});
+
+test('per-plant blynkToken links via PATCH without leaking token and syncs live readings', async (t) => {
+  const fakeFetch = async (url) => {
+    const u = String(url);
+    if (u.includes('/external/api/isHardwareConnected') && u.includes('user-blynk-secret')) {
+      return new Response('true', { status: 200 });
+    }
+    if (u.includes('/external/api/get') && u.includes('user-blynk-secret')) {
+      return Response.json({ v0: 58.6, v1: 25.1, v2: 61, v3: 0 });
+    }
+    throw new Error(`Unexpected fetch: ${u}`);
+  };
+
+  const { call } = await start(t, { fetch: fakeFetch });
+  const plant = (await call('POST', '/api/plants', { name: 'Balcony Mint' })).body;
+  assert.equal(plant.blynkLinked, undefined);
+
+  const linked = await call('PATCH', `/api/plants/${plant.id}`, { blynkToken: 'user-blynk-secret' });
+  assert.equal(linked.status, 200);
+  assert.equal(linked.body.blynkLinked, true);
+  assert.equal('blynkToken' in linked.body, false);
+  assert.equal(linked.body.sensors.humidity.connected, true);
+  assert.equal(linked.body.sensors.humidity.value, 58.6);
+  assert.equal(linked.body.sensors.temperature.value, 25.1);
+  assert.equal(linked.body.sensors.soilMoisture.value, 61);
+
+  const unlinked = await call('PATCH', `/api/plants/${plant.id}`, { blynkToken: '' });
+  assert.equal(unlinked.status, 200);
+  assert.equal(unlinked.body.blynkLinked, false);
+  assert.equal(unlinked.body.sensors.humidity.connected, false);
 });
 
 test('POST /api/plants/:id/sensors accepts ESP32 payloads and marks stale readings disconnected', async (t) => {

@@ -76,25 +76,101 @@
 
     <section id="view-setup" class="view" aria-labelledby="h-setup">
       <h1 id="h-setup">Connect ESP32 sensors</h1>
-      <p class="muted">Pick a plant, enter Wi-Fi, download the sketch, flash it. Readings appear below.</p>
 
-      <section class="card">
-        <h2>Wiring</h2>
-        <div style="display:grid;gap:8px;font-size:15px;">
-          <div><strong>DHT22</strong> — DATA → GPIO 4, VCC → 3.3V, GND → GND</div>
-          <div><strong>Soil moisture</strong> — AO → GPIO 34, VCC → 3.3V, GND → GND</div>
-          <div class="muted small"><strong>Light (optional)</strong> — AO → GPIO 35. Enable <code>LIGHT_SENSOR_ENABLED = true</code> in sketch.</div>
-        </div>
-        <p class="muted small">Bare DHT22 needs 10 kΩ pull-up between DATA and 3.3V. ESP32 needs 2.4 GHz Wi-Fi.</p>
+      <!-- Step-by-step visual guide -->
+      <section class="card steps-guide">
+        <h2>Quick start: 5 steps</h2>
+        <ol class="step-list">
+          <li class="step">
+            <span class="step-num">1</span>
+            <div class="step-content">
+              <strong>Wire the sensors</strong> — See wiring diagram below. Connect DHT22 DATA, soil moisture AO, and optional light AO to the ESP32 GPIOs you'll pick in step 3.
+            </div>
+          </li>
+          <li class="step">
+            <span class="step-num">2</span>
+            <div class="step-content">
+              <strong>Create a Blynk device</strong> — Open <a href="https://cloud.blynk.io" target="_blank">Blynk Cloud Console</a>. Create a new device template (or use existing). Note your <strong>Template ID</strong> and <strong>Auth Token</strong>.
+            </div>
+          </li>
+          <li class="step">
+            <span class="step-num">3</span>
+            <div class="step-content">
+              <strong>Configure & download</strong> — Enter Wi-Fi (2.4 GHz only), your Blynk Template ID & Auth Token, choose your GPIO pins, click <strong>Download sketch</strong>.
+            </div>
+          </li>
+          <li class="step">
+            <span class="step-num">4</span>
+            <div class="step-content">
+              <strong>Flash to ESP32</strong> — Open the downloaded <code>watermi_blynk.ino</code> in Arduino IDE. Install <strong>Blynk</strong> library (Sketch → Include Library → Manage Libraries → search "Blynk"). Select board & port. Click <strong>Upload</strong>. Open Serial Monitor at 115200 baud — you should see "Wi-Fi connected!" and Blynk connection.
+            </div>
+          </li>
+          <li class="step">
+            <span class="step-num">5</span>
+            <div class="step-content">
+              <strong>Connect to your plant</strong> — Pick your plant below and click <strong>Connect Blynk to plant</strong>. Live readings appear right here and on your Dashboard automatically!
+            </div>
+          </li>
+        </ol>
       </section>
 
+      <!-- Wiring diagram -->
       <section class="card">
-        <h2>Generate sketch</h2>
-        <div class="field">
-          <label for="s-plant">Plant</label>
-          <select id="s-plant"></select>
-          <p id="s-noplant" class="muted small" hidden>No plants yet. Add one first.</p>
+        <h2>Wiring diagram</h2>
+        <div class="wiring-diagram" aria-label="ESP32 sensor wiring">
+          <div class="sensor-row">
+            <span class="sensor-name">DHT22</span>
+            <span class="sensor-pins">
+              <span class="pin"><span class="label">VCC</span> → <span class="value">3.3V</span></span>
+              <span class="pin"><span class="label">DATA</span> → <span class="value" id="w-dhtpin">GPIO 4</span></span>
+              <span class="pin"><span class="label">GND</span> → <span class="value">GND</span></span>
+            </span>
+          </div>
+          <div class="sensor-row">
+            <span class="sensor-name">Soil moisture</span>
+            <span class="sensor-pins">
+              <span class="pin"><span class="label">VCC</span> → <span class="value">3.3V</span></span>
+              <span class="pin"><span class="label">AO</span> → <span class="value" id="w-soilpin">GPIO 34</span></span>
+              <span class="pin"><span class="label">GND</span> → <span class="value">GND</span></span>
+            </span>
+          </div>
+          <div class="sensor-row optional">
+            <span class="sensor-name">Light (optional)</span>
+            <span class="sensor-pins">
+              <span class="pin"><span class="label">AO</span> → <span class="value" id="w-lightpin">GPIO 35</span></span>
+            </span>
+          </div>
+          <p class="wiring-notes">
+            <strong>⚡ ADC1 pins (32–39)</strong> work while Wi-Fi is active. Avoid GPIO 6–11 for DHT22 (strapped pins).
+            <br><strong>🔌 Bare DHT22:</strong> add a 10 kΩ pull-up resistor between DATA and 3.3V.
+            <br><strong>📶 2.4 GHz Wi-Fi only</strong> — 5 GHz does not work on ESP32.
+          </p>
         </div>
+      </section>
+
+      <!-- Generate sketch form -->
+      <section class="card">
+        <h2>Connect Blynk &amp; generate sketch</h2>
+        <div class="field">
+          <label for="s-plant">Which plant is this sensor for?</label>
+          <select id="s-plant"></select>
+          <p id="s-noplant" class="muted small" hidden>Add a plant on the Dashboard first, then come back here.</p>
+        </div>
+        <div class="field">
+          <label for="s-blynk-template">Blynk Template ID</label>
+          <input id="s-blynk-template" autocomplete="off" placeholder="TMPLxxxxxx (from Blynk Console)">
+        </div>
+        <div class="field">
+          <label for="s-blynk-auth">Blynk Auth Token</label>
+          <input id="s-blynk-auth" type="password" autocomplete="off" placeholder="Paste your device Auth Token from Blynk">
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <button type="button" id="s-connect" class="btn primary" disabled>Connect Blynk to plant</button>
+          <button type="button" id="s-disconnect" class="btn quiet" hidden>Disconnect Blynk</button>
+        </div>
+        <p id="connect-hint" class="muted small" style="margin-top:6px;">Paste your Blynk Auth Token and click Connect so WaterMI reads live data automatically.</p>
+
+        <h3 style="margin:20px 0 8px;">Wi-Fi (for ESP32 sketch)</h3>
         <div class="field">
           <label for="s-ssid">Wi-Fi name (2.4 GHz)</label>
           <input id="s-ssid" autocomplete="off" placeholder="MyHomeWifi">
@@ -103,11 +179,8 @@
           <label for="s-pass">Wi-Fi password</label>
           <input id="s-pass" type="password" autocomplete="off" placeholder="Never leaves your browser">
         </div>
-        <div class="field">
-          <label for="s-url">WaterMI URL</label>
-          <input id="s-url" autocomplete="off" placeholder="http://192.168.x.x:3000">
-        </div>
 
+        <h3 style="margin:16px 0 8px;">Pin assignments</h3>
         <div class="field">
           <label for="s-dhtpin">DHT22 data pin</label>
           <select id="s-dhtpin"></select>
@@ -136,7 +209,7 @@
           <div class="field" style="margin-top:8px;">
             <label for="s-interval">Send interval (ms)</label>
             <input id="s-interval" type="number" min="1000" step="500" value="2000" placeholder="2000">
-            <p class="muted small">How often to upload readings (min 1000ms)</p>
+            <p class="muted small">How often to send to Blynk (min 1000ms)</p>
           </div>
           <div class="field">
             <label for="s-dry">Soil dry raw value</label>
@@ -148,29 +221,26 @@
             <input id="s-wet" type="number" min="0" max="4095" value="0" placeholder="0">
             <p class="muted small">Measure in water, then adjust</p>
           </div>
-          <div class="field">
-            <label for="s-key">Sensor key (optional)</label>
-            <input id="s-key" autocomplete="off" placeholder="Only if SENSOR_KEY set on server">
-          </div>
-          <p class="muted small">After downloading, open the sketch to edit sensor type or other settings.</p>
         </details>
         <button type="button" id="s-download" class="btn primary big" disabled>Download sketch</button>
+        <p id="download-hint" class="muted small" style="margin-top:8px;">Enter Wi-Fi, Blynk Template ID &amp; Auth Token, then click Download sketch.</p>
       </section>
 
       <section class="card" aria-live="polite">
         <h2>Live check</h2>
-        <p id="live-msg" class="muted">Select a plant above to see live readings.</p>
-        <div id="live" class="live"></div>
+        <p id="live-msg" class="muted">Choose a plant above to check live sensor readings.</p>
+        <div id="live" class="sensor-grid" style="margin-top:12px;"></div>
       </section>
 
       <details class="card">
         <summary>Troubleshooting</summary>
         <ul style="margin:12px 0 0 18px;line-height:1.8;font-size:15px;">
-          <li><strong>No POST 200:</strong> check Wi-Fi name/password (2.4 GHz only)</li>
-          <li><strong>POST 404:</strong> plant deleted or server reset — regenerate sketch</li>
-          <li><strong>POST 401:</strong> sensor key mismatch</li>
-          <li><strong>Temp/humidity "Not connected":</strong> check DHT22 wiring on GPIO 4 + pull-up resistor</li>
-          <li><strong>All sensors drop after ~30s:</strong> board stopped — check power/Wi-Fi</li>
+          <li><strong>ESP32 won't connect to Wi-Fi:</strong> Check 2.4 GHz network name & password</li>
+          <li><strong>"Invalid Auth Token" in Serial Monitor:</strong> Re-check Template ID & Auth Token from Blynk Console</li>
+          <li><strong>Blynk shows "Device offline":</strong> Check Wi-Fi, restart ESP32, verify Auth Token matches device</li>
+          <li><strong>Temp/humidity shows NaN:</strong> Check DHT22 wiring on selected GPIO + 10 kΩ pull-up resistor</li>
+          <li><strong>Soil moisture stuck at 0% or 100%:</strong> Calibrate SOIL_DRY_RAW / SOIL_WET_RAW in Advanced options</li>
+          <li><strong>All sensors drop after ~30s:</strong> Board stopped — check power supply & Wi-Fi stability</li>
         </ul>
       </details>
     </section>

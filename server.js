@@ -408,6 +408,9 @@ export function createApp({
   mockDelayMs = 60,
   sensorTimeoutMs = 30_000,
   sensorKey = '',
+  blynkToken = '',
+  blynkServer = 'https://blynk.cloud',
+  blynkPlantId = '',
 } = {}) {
   const store = openStore(dataDir);
   const ai = { fetch, apiKey };
@@ -434,10 +437,60 @@ export function createApp({
     if (sensorTimeoutMs > 0 && Number.isFinite(updatedAt) && Date.now() - updatedAt > sensorTimeoutMs) {
       for (const s of Object.values(sensors)) s.connected = false;
     }
-    return { ...plant, sensors };
+    const { blynkToken: savedToken, ...safePlant } = plant;
+    const usesEnvBlynk = Boolean(blynkToken && (!blynkPlantId ? store.plants()[0]?.id === plant.id : blynkPlantId === plant.id));
+    return { ...safePlant, blynkLinked: Boolean(savedToken || usesEnvBlynk), sensors };
   };
 
-  app.get('/api/plants', (req, res) => res.json(store.plants().map(withSensors)));
+  const BLYNK_PINS = { v0: 'humidity', v1: 'temperature', v2: 'soilMoisture', v3: 'light' };
+  const lastBlynkSyncByPlant = new Map();
+
+  async function syncPlantFromBlynk(plant, { force = false } = {}) {
+    const usesEnvBlynk = Boolean(blynkToken && (!blynkPlantId ? store.plants()[0]?.id === plant.id : blynkPlantId === plant.id));
+    const token = plant.blynkToken || (usesEnvBlynk ? blynkToken : '');
+    if (!token) return;
+
+    const nowMs = Date.now();
+    const lastMs = lastBlynkSyncByPlant.get(plant.id) ?? 0;
+    if (!force && nowMs - lastMs < 2500) return;
+    lastBlynkSyncByPlant.set(plant.id, nowMs);
+
+    const base = (plant.blynkServer || blynkServer).replace(/\/+$/, '');
+    const tok = encodeURIComponent(token);
+    try {
+      const [connRes, dataRes] = await Promise.all([
+        fetch(`${base}/external/api/isHardwareConnected?token=${tok}`, { signal: AbortSignal.timeout(5000) }),
+        fetch(`${base}/external/api/get?token=${tok}&v0&v1&v2&v3`, { signal: AbortSignal.timeout(5000) }),
+      ]);
+      if (!connRes.ok || !dataRes.ok) return;
+
+      const online = (await connRes.text()).trim().toLowerCase() === 'true';
+      const raw = await dataRes.json().catch(() => null);
+      const patch = {};
+      for (const [pin, key] of Object.entries(BLYNK_PINS)) {
+        const val = raw && typeof raw === 'object' ? raw[pin] ?? raw[pin.toUpperCase()] : undefined;
+        const n = val === null || val === undefined || val === '' ? NaN : Number(val);
+        patch[key] = online && Number.isFinite(n)
+          ? { connected: true, value: Math.round(n * 10) / 10 }
+          : { connected: false, value: null };
+      }
+      plant.sensors = normalizeSensors(patch, plant.sensors);
+      plant.sensorsUpdatedAt = new Date().toISOString();
+      store.save();
+    } catch (err) {
+      console.error(`Blynk sync failed for ${plant.id}: ${err.message}`);
+    }
+  }
+
+  async function syncBlynkIfConfigured() {
+    const targets = store.plants().filter((p) => p.blynkToken || (blynkToken && (!blynkPlantId ? store.plants()[0]?.id === p.id : blynkPlantId === p.id)));
+    if (targets.length) await Promise.all(targets.map((p) => syncPlantFromBlynk(p)));
+  }
+
+  app.get('/api/plants', async (req, res) => {
+    await syncBlynkIfConfigured();
+    res.json(store.plants().map(withSensors));
+  });
 
   app.post('/api/plants', (req, res) => {
     const body = req.body ?? {};
@@ -461,7 +514,7 @@ export function createApp({
     res.status(201).json(plant);
   });
 
-  app.patch('/api/plants/:id', (req, res) => {
+  app.patch('/api/plants/:id', async (req, res) => {
     const plant = store.find(req.params.id);
     const body = req.body ?? {};
     const changes = {};
@@ -477,8 +530,26 @@ export function createApp({
       }
       changes.sensors = normalizeSensors(body.sensors, plant.sensors);
     }
+    let blynkChanged = false;
+    if (body.blynkToken !== undefined) {
+      changes.blynkToken = text(body.blynkToken, 120);
+      blynkChanged = true;
+      if (!changes.blynkToken) {
+        changes.sensors = normalizeSensors({});
+      }
+    }
+    if (body.blynkServer !== undefined) {
+      const serverUrl = text(body.blynkServer, 200);
+      if (serverUrl && !/^https:\/\/[a-z0-9.-]+$/i.test(serverUrl)) {
+        throw badRequest('blynkServer must be an https:// hostname');
+      }
+      changes.blynkServer = serverUrl;
+    }
     Object.assign(plant, changes);
     store.save();
+    if (blynkChanged && plant.blynkToken) {
+      await syncPlantFromBlynk(plant, { force: true });
+    }
     res.json(withSensors(plant));
   });
 
@@ -723,6 +794,49 @@ export function createApp({
     res.end();
   });
 
+  // ---------- Blynk webhook ----------
+  app.post('/api/webhook/blynk', (req, res) => {
+    if (sensorKey && req.get('x-sensor-key') !== sensorKey && req.query?.key !== sensorKey) {
+      throw new ApiError(401, 'bad_key', 'Invalid or missing x-sensor-key header');
+    }
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const sources = [req.query ?? {}, body, body.values && typeof body.values === 'object' ? body.values : {}];
+    const patch = {};
+
+    // Support { pin: "V0", value: "64.2" } single-datastream webhooks
+    if (typeof body.pin === 'string') {
+      const key = BLYNK_PINS[body.pin.toLowerCase()];
+      if (key) {
+        const n = body.value === null || body.value === '' ? NaN : Number(body.value);
+        patch[key] = Number.isFinite(n)
+          ? { connected: true, value: Math.round(n * 10) / 10 }
+          : { connected: false, value: null };
+      }
+    }
+
+    // Support V0..V3 / v0..v3 in query, body, or body.values (partial updates preserved)
+    for (const src of sources) {
+      for (const [pin, key] of Object.entries(BLYNK_PINS)) {
+        const rawVal = src[pin] !== undefined ? src[pin] : src[pin.toUpperCase()];
+        if (rawVal === undefined) continue;
+        const n = rawVal === null || rawVal === '' ? NaN : Number(rawVal);
+        patch[key] = Number.isFinite(n)
+          ? { connected: true, value: Math.round(n * 10) / 10 }
+          : { connected: false, value: null };
+      }
+    }
+
+    const requestedId = text(req.query?.plantId || body.plantId || blynkPlantId, 80);
+    const allPlants = store.plants();
+    const plant = (requestedId ? allPlants.find((p) => p.id === requestedId) : null) ?? allPlants[0];
+    if (!plant) throw notFound('Plant');
+
+    plant.sensors = normalizeSensors(patch, plant.sensors);
+    plant.sensorsUpdatedAt = new Date().toISOString();
+    store.save();
+    res.json(withSensors(plant));
+  });
+
   app.use('/api', (req, res) => res.status(404).json({ error: 'Not found', code: 'not_found' }));
 
   app.use((err, req, res, next) => {
@@ -762,6 +876,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     analysisFallbackModel: env.ANALYSIS_FALLBACK_MODEL,
     sensorTimeoutMs: env.SENSOR_TIMEOUT_MS !== undefined ? Number(env.SENSOR_TIMEOUT_MS) : undefined,
     sensorKey: env.SENSOR_KEY || '',
+    blynkToken: env.BLYNK_AUTH_TOKEN || '',
+    blynkServer: env.BLYNK_SERVER || undefined,
+    blynkPlantId: env.BLYNK_PLANT_ID || '',
   });
   app.listen(port, host, (err) => {
     if (err) {

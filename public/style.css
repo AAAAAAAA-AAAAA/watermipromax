@@ -328,6 +328,39 @@ details pre { margin-top: 10px; padding: 12px; border-radius: 10px; background: 
 #view-setup h2 { font-size: 21px; margin: 0 0 12px; }
 #view-setup .card + .card { margin-top: 16px; }
 
+/* Steps guide */
+.steps-guide { border-left: 4px solid var(--leaf); background: var(--tint); }
+.step-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; counter-reset: step; }
+.step { display: grid; grid-template-columns: 36px 1fr; gap: 12px; align-items: start; }
+.step-num {
+  width: 32px; height: 32px; border-radius: 50%; background: var(--green); color: #fff;
+  font-family: var(--serif); font-weight: 700; font-size: 18px; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-top: 2px;
+}
+.step-content { font-size: 15px; line-height: 1.6; color: var(--ink); }
+.step-content code { background: var(--card); padding: 2px 6px; border-radius: 6px; font-size: 14px; }
+
+/* Wiring diagram */
+.wiring-diagram { display: grid; gap: 10px; }
+.sensor-row { display: grid; grid-template-columns: 130px 1fr; gap: 16px; align-items: center; padding: 10px 12px; background: var(--tint); border-radius: 10px; }
+.sensor-row.optional { opacity: 0.7; }
+.sensor-name { font-weight: 700; font-size: 16px; color: var(--ink); }
+.sensor-pins { display: flex; flex-wrap: wrap; gap: 12px; }
+.pin { display: flex; flex-direction: column; gap: 2px; min-width: 100px; }
+.pin .label { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; }
+.pin .value { font-family: var(--serif); font-size: 17px; font-weight: 600; color: var(--green); background: var(--card); padding: 4px 10px; border-radius: 8px; border: 1px solid var(--line); }
+.wiring-notes { margin: 12px 0 0; font-size: 14px; line-height: 1.7; color: var(--muted); }
+.wiring-notes strong { color: var(--ink); }
+
+/* Download hint */
+#download-hint { text-align: center; }
+
+@media (max-width: 639px) {
+  .sensor-row { grid-template-columns: 1fr; gap: 8px; }
+  .sensor-pins { justify-content: space-between; }
+  .pin { flex: 1; text-align: center; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }

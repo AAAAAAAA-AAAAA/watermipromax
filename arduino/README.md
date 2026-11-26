@@ -1,19 +1,19 @@
-# WaterMI ESP32 sensor setup
+# WaterMI ESP32 + Blynk sensor setup
 
-Send live **humidity**, **temperature**, **soil moisture** and optional **light** readings from an ESP32 to WaterMI.
+Send live **humidity**, **temperature**, **soil moisture** and optional **light** readings from an ESP32 to **Blynk IoT**, then view in the Blynk app or web dashboard.
 
 ## The easy way: use the setup page
 
-1. Open your WaterMI site (e.g., `https://watermi.onrender.com`) and click the **Sensors** tab in the top navigation. You can also click **How to connect your sensors** in any plant's detail view.
-2. Pick your plant, enter your Wi-Fi name and password.
-3. **Select your pin wiring** using the dropdowns:
-   - **DHT22 data pin** — GPIO for the DHT22 DATA wire (avoids strapped pins 6–11)
-   - **Soil moisture pin** — ADC1 pin for soil moisture AO (GPIO 32–39)
-   - **Light sensor pin** — ADC1 pin for light sensor AO (GPIO 32–39)
-   - **Enable light sensor** — Yes/No
-4. Click **Download sketch**. The page fills in the server address and plant ID. Your Wi-Fi password never leaves your browser.
-5. Open the downloaded `watermi_esp32.ino` in Arduino IDE and click **Upload** (see "One-time Arduino IDE setup" below).
-6. Watch the **Live check** section on the same page. Readings and **Connected** badges appear within a few seconds.
+1. Open your WaterMI site and click the **Sensors** tab in the top navigation.
+2. **Create a Blynk device** — Open <https://cloud.blynk.io>, create a new device template (or use existing). Note your **Template ID** (e.g., `TMPLxxxxxx`) and **Auth Token**.
+3. **Configure & download** — Enter Wi-Fi (2.4 GHz only), your Blynk Template ID & Auth Token, choose your GPIO pins in the dropdowns, click **Download sketch**.
+4. **Flash to ESP32** — Open the downloaded `watermi_blynk.ino` in Arduino IDE. Install **Blynk** library (Sketch → Include Library → Manage Libraries → search "Blynk"). Select board & port. Click **Upload**. Open Serial Monitor at 115200 baud — you should see "Wi-Fi connected!" and Blynk connection.
+5. **Watch live data in Blynk** — Open the Blynk app (mobile or web). Add Gauge/Value Display widgets for:
+   - **V0** = Humidity (%)
+   - **V1** = Temperature (°C)
+   - **V2** = Soil Moisture (%)
+   - **V3** = Light (lux)
+   Data appears every 2 seconds.
 
 ## What you need
 
@@ -22,6 +22,7 @@ Send live **humidity**, **temperature**, **soil moisture** and optional **light*
 - Analog soil moisture sensor with an `AO` pin
 - *(Optional)* Analog light sensor (LDR or TEMT6000)
 - Jumper wires and a USB cable
+- Blynk account (free tier works)
 
 ## Wiring
 
@@ -41,26 +42,27 @@ Send live **humidity**, **temperature**, **soil moisture** and optional **light*
 
 1. Install [Arduino IDE](https://www.arduino.cc/en/software).
 2. **Tools → Board → Boards Manager**: install **esp32** by Espressif Systems.
-3. **Sketch → Include Library → Manage Libraries**: install **DHT sensor library** by Adafruit. Accept the extra **Adafruit Unified Sensor** dependency.
+3. **Sketch → Include Library → Manage Libraries**: install **Blynk** by Volodymyr Shymanskyy. Also install **DHT sensor library** by Adafruit (accept **Adafruit Unified Sensor** dependency).
 4. Choose your ESP32 board and port under **Tools**, then click **Upload**.
-5. Open **Serial Monitor** at `115200` baud. You should see `Wi-Fi connected!` and `POST 200` every 2 seconds.
+5. Open **Serial Monitor** at `115200` baud. You should see `Wi-Fi connected!` and Blynk connection messages.
 
 ## Editing the sketch by hand
 
-Open [watermi_esp32/watermi_esp32.ino](watermi_esp32/watermi_esp32.ino) and customize these constants at the top:
+Open [watermi_blynk/watermi_blynk.ino](watermi_blynk/watermi_blynk.ino) and customize these constants at the top:
 
 ```cpp
 // Wi-Fi credentials
 const char* WIFI_SSID     = "YOUR_WIFI_NAME";
 const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
 
-// WaterMI server URL
-const char* SERVER_URL    = "https://your-app.onrender.com";
-const char* PLANT_ID      = "YOUR_PLANT_ID";
-const char* SENSOR_KEY    = "";
+// Blynk settings (get from Blynk Console → Device → Template)
+#define BLYNK_TEMPLATE_ID "YOUR_TEMPLATE_ID"
+#define BLYNK_DEVICE_NAME "WaterMI Sensor"
+#define BLYNK_AUTH_TOKEN  "YOUR_AUTH_TOKEN"
 
 // Pin assignments (edit these to match your wiring)
 #define DHTPIN  4               // DHT22 data pin
+#define DHTTYPE DHT22
 const int soilMoisturePin = 34; // Soil moisture AO pin
 const bool LIGHT_SENSOR_ENABLED = false;  // Set to true to enable light sensor
 const int  lightPin             = 35;     // Light sensor AO pin
@@ -71,16 +73,34 @@ const int SOIL_WET_RAW = 0;      // Raw value in water
 
 // How often to send readings (milliseconds)
 const unsigned long SEND_INTERVAL_MS = 2000;
+
+// Blynk virtual pins (match widgets in Blynk app)
+#define VPIN_HUMIDITY     V0
+#define VPIN_TEMPERATURE  V1
+#define VPIN_SOIL         V2
+#define VPIN_LIGHT        V3
 ```
 
 ### Customization Options
 
-- **SERVER_URL**: Use your deployed `https://` address, or `http://YOUR-PC-IP:PORT` when WaterMI runs on the same Wi-Fi (set `HOST=0.0.0.0` in `.env`).
-- **PLANT_ID**: The `id` of your plant from `/api/plants`.
-- **SENSOR_KEY**: Leave empty unless you set `SENSOR_KEY` on the server.
+- **BLYNK_TEMPLATE_ID / BLYNK_AUTH_TOKEN**: Get from Blynk Console → Device → Template.
 - **LIGHT_SENSOR_ENABLED**: Set to `true` and wire an analog light sensor to GPIO 35.
 - **SOIL_DRY_RAW / SOIL_WET_RAW**: Calibrate for your specific sensor (measure in dry air and in water).
 - **SEND_INTERVAL_MS**: Lower for faster updates (minimum 1000ms), higher for less frequent uploads.
+- **VPIN_HUMIDITY / VPIN_TEMPERATURE / VPIN_SOIL / VPIN_LIGHT**: Virtual pin numbers. Match these to your Blynk widgets.
+
+## Blynk widget setup
+
+In Blynk Console or mobile app, add **Value Display** or **Gauge** widgets:
+
+| Virtual Pin | Label | Unit | Range |
+| --- | --- | --- | --- |
+| V0 | Humidity | % | 0–100 |
+| V1 | Temperature | °C | -40–80 |
+| V2 | Soil Moisture | % | 0–100 |
+| V3 | Light | lux | 0–20000 |
+
+Set reading rate to "Push" (not Poll) since the ESP32 pushes data.
 
 ## Soil moisture calibration
 
@@ -92,23 +112,16 @@ Every probe reads a little differently.
 
 ## How it works
 
-The sketch posts JSON every 2 seconds to `POST /api/plants/:id/sensors`:
+The sketch sends sensor values to Blynk virtual pins every 2 seconds using `Blynk.virtualWrite()`. Blynk handles the cloud connection, device management, and dashboard widgets.
 
-```json
-{ "humidity": 64.2, "temperature": 27.5, "soilMoisture": 48, "light": null }
-```
+- Values appear in real-time on Blynk web/mobile dashboards.
+- If Wi-Fi drops, the sketch reconnects automatically.
+- `null`/NaN values are not sent (sensor shows as disconnected in Blynk).
 
-- A number marks that sensor **Connected**.
-- `null` marks it **Not connected**.
-- If nothing arrives for 30 seconds (change with `SENSOR_TIMEOUT_MS`), every sensor shows **Not connected**.
-- If `SENSOR_KEY` is set on the server, requests must send it in an `x-sensor-key` header. The sketch does this when its `SENSOR_KEY` is filled in.
-
-Test without hardware:
+Test without hardware (simulate device in Blynk):
 
 ```bash
-curl -X POST https://your-app.onrender.com/api/plants/PLANT_ID/sensors \
-  -H "Content-Type: application/json" \
-  -d '{"humidity":64.2,"temperature":27.5,"soilMoisture":48,"light":null}'
+# Not needed — Blynk handles device communication
 ```
 
 ## Troubleshooting
@@ -116,9 +129,9 @@ curl -X POST https://your-app.onrender.com/api/plants/PLANT_ID/sensors \
 | Symptom | Fix |
 | --- | --- |
 | Never connects to Wi-Fi | Use a 2.4 GHz network and check the name and password. |
-| `POST 404` | The plant was deleted or the server data was reset. Download the sketch again from the setup page. |
-| `POST 401` | The sensor key does not match the server's `SENSOR_KEY`. |
-| `HTTP error: connection refused` | The address is wrong. For a local server, set `HOST=0.0.0.0` and allow the port through the firewall. |
-| Humidity and temperature show Not connected | Check the DHT22 data wire on GPIO 4 and its 3.3V and GND. |
-| Everything goes Not connected after 30 seconds | The board stopped sending. Check power and Wi-Fi. |
-| Free Render service reset your plants | Add the plant again, then download and upload a fresh sketch so `PLANT_ID` matches. |
+| "Invalid Auth Token" in Serial Monitor | Re-check Template ID & Auth Token from Blynk Console. They must match the device. |
+| Blynk shows "Device offline" | Check Wi-Fi, restart ESP32, verify Auth Token matches the device in Blynk. |
+| Humidity and temperature show NaN | Check the DHT22 data wire on selected GPIO and its 3.3V and GND. Add 10 kΩ pull-up if bare sensor. |
+| Soil moisture stuck at 0% or 100% | Calibrate SOIL_DRY_RAW / SOIL_WET_RAW in Advanced options (measure in dry air and water). |
+| All sensors drop after ~30s | Board stopped — check power supply (use USB or stable 5V) & Wi-Fi stability. |
+| "Blynk library not found" | Install Blynk library in Arduino IDE: Sketch → Include Library → Manage Libraries → search "Blynk". |
