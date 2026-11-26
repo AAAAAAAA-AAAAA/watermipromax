@@ -5,7 +5,7 @@ Send live **humidity**, **temperature**, **soil moisture** and optional **light*
 ## The easy way: use the setup page
 
 1. Open your WaterMI site and click the **Sensors** tab in the top navigation.
-2. **Create a Blynk device** — Open <https://cloud.blynk.io>, create a new device template (or use existing). Note your **Template ID** (e.g., `TMPLxxxxxx`) and **Auth Token**.
+2. **Create a Blynk device** — Open <https://blynk.cloud>, create a new device template (or use existing). Note your **Template ID** (e.g., `TMPLxxxxxx`) and **Auth Token**.
 3. **Configure & download** — Enter Wi-Fi (2.4 GHz only), your Blynk Template ID & Auth Token, choose your GPIO pins in the dropdowns, click **Download sketch**.
 4. **Flash to ESP32** — Open the downloaded `watermi_blynk.ino` in Arduino IDE. Install **Blynk** library (Sketch → Include Library → Manage Libraries → search "Blynk"). Select board & port. Click **Upload**. Open Serial Monitor at 115200 baud — you should see "Wi-Fi connected!" and Blynk connection.
 5. **Watch live data in Blynk** — Open the Blynk app (mobile or web). Add Gauge/Value Display widgets for:

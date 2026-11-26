@@ -289,7 +289,20 @@ function sensorsSection(plant) {
             'aria-label': hasValue ? undefined : 'No reading',
           }, reading));
       })),
-    el('a', { class: 'muted small', href: '/setup.html' }, 'How to connect your sensors'));
+    el('a', {
+      class: 'muted small',
+      href: '#setup',
+      onclick: (e) => {
+        e.preventDefault();
+        $('#dlg-plant')?.close();
+        const select = $('#s-plant');
+        if (select) {
+          select.value = plant.id;
+          select.dispatchEvent(new Event('change'));
+        }
+        showView('setup');
+      },
+    }, 'How to connect your sensors'));
 }
 
 function healthChart(checkups) {
