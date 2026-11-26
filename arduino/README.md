@@ -4,10 +4,16 @@ Send live **humidity**, **temperature**, **soil moisture** and optional **light*
 
 ## The easy way: use the setup page
 
-1. Open your WaterMI site and go to **`/setup.html`** (for example `https://your-app.onrender.com/setup.html`). You can also click **How to connect your sensors** in any plant's detail view.
-2. Pick your plant, enter your Wi-Fi name and password, and click **Download sketch**. The page fills in the server address and plant ID for you. Your Wi-Fi password stays in your browser.
-3. Open the downloaded `watermi_esp32.ino` in Arduino IDE and click **Upload** (see "One-time Arduino IDE setup" below).
-4. Watch the **Live check** section on the same page. Readings and **Connected** badges appear within a few seconds.
+1. Open your WaterMI site (e.g., `https://watermi.onrender.com`) and click the **Sensors** tab in the top navigation. You can also click **How to connect your sensors** in any plant's detail view.
+2. Pick your plant, enter your Wi-Fi name and password.
+3. **Select your pin wiring** using the dropdowns:
+   - **DHT22 data pin** — GPIO for the DHT22 DATA wire (avoids strapped pins 6–11)
+   - **Soil moisture pin** — ADC1 pin for soil moisture AO (GPIO 32–39)
+   - **Light sensor pin** — ADC1 pin for light sensor AO (GPIO 32–39)
+   - **Enable light sensor** — Yes/No
+4. Click **Download sketch**. The page fills in the server address and plant ID. Your Wi-Fi password never leaves your browser.
+5. Open the downloaded `watermi_esp32.ino` in Arduino IDE and click **Upload** (see "One-time Arduino IDE setup" below).
+6. Watch the **Live check** section on the same page. Readings and **Connected** badges appear within a few seconds.
 
 ## What you need
 
@@ -22,14 +28,14 @@ Send live **humidity**, **temperature**, **soil moisture** and optional **light*
 | Sensor | Sensor pin | ESP32 pin |
 | --- | --- | --- |
 | DHT22 | VCC | `3.3V` |
-| DHT22 | DATA | `GPIO 4` |
+| DHT22 | DATA | `GPIO 4` (default) — changeable in setup page |
 | DHT22 | GND | `GND` |
 | Soil moisture | VCC | `3.3V` |
-| Soil moisture | AO | `GPIO 34` |
+| Soil moisture | AO | `GPIO 34` (default) — ADC1 pins 32–39 |
 | Soil moisture | GND | `GND` |
-| Light *(optional)* | AO | `GPIO 35` |
+| Light *(optional)* | AO | `GPIO 35` (default) — ADC1 pins 32–39 |
 
-GPIO 34 and 35 are on ADC1, which keeps working while Wi-Fi is on. A bare DHT22 (not on a breakout board) needs a 10 kΩ resistor between DATA and `3.3V`.
+**ADC1 pins (32–39)** keep working while Wi-Fi is active. Avoid GPIO 6–11 for DHT22 (strapped pins). A bare DHT22 (not on a breakout board) needs a 10 kΩ resistor between DATA and `3.3V`.
 
 ## One-time Arduino IDE setup
 
